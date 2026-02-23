@@ -806,3 +806,5 @@ document.getElementById('btn-verify').addEventListener('click', () => {
 	document.querySelector('.verify-box').innerHTML = '<p style="color:var(--green);font-weight:600;font-size:.9375rem">✓ Email verified! Your listing is now in review.</p>';
 });
 
+});
+
