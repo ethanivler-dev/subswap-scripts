@@ -552,10 +552,13 @@ function loadDraft() {
 	} catch(e) { console.error("Draft load failed:", e); }
 }
 
-const formEl = document.getElementById('listing-form');
-formEl.addEventListener('input', saveDraft);
-formEl.addEventListener('change', saveDraft);
-document.addEventListener('DOMContentLoaded', loadDraft);
+if (formEl) {
+	formEl.addEventListener('input', saveDraft);
+	formEl.addEventListener('change', saveDraft);
+}
+
+// we're already inside DOMContentLoaded; run loadDraft immediately
+loadDraft();
 
 function buildPayload(photoUrls = []) {
 	const pets = [...document.querySelectorAll('.pet-tag.active')].map(t => t.dataset.pet).join(', ');
@@ -740,6 +743,26 @@ document.getElementById('listing-form').addEventListener('submit', async e => {
 			if (data && data.length > 0) {
 				currentListingId = data[0].id;
 			}
+		}
+
+		// Persist normalized photo records in `listing_photos` table
+		try {
+			if (!currentListingId) throw new Error('Missing listing id after save');
+			// If updating, remove old photo rows for this listing
+			await supabaseClient.from('listing_photos').delete().eq('listing_id', currentListingId);
+			const photoRows = uploadedUrls.map((u, idx) => ({
+				listing_id: currentListingId,
+				url: u,
+				note: storedFiles[idx] && storedFiles[idx].note ? storedFiles[idx].note : null,
+				position: idx
+			}));
+			if (photoRows.length) {
+				const { error: photoErr } = await supabaseClient.from('listing_photos').insert(photoRows);
+				if (photoErr) throw new Error('Failed to save listing photos: ' + photoErr.message);
+			}
+		} catch (photoSaveErr) {
+			console.error('Photo save error:', photoSaveErr);
+			alert('Warning: photos saved to storage but failed to persist in database.');
 		}
 
 	} catch(err) {
