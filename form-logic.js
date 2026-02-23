@@ -1,5 +1,15 @@
 // Wrap form logic in DOMContentLoaded and guard element access
 document.addEventListener('DOMContentLoaded', () => {
+	console.log('[form] script loaded');
+
+	// Global runtime logging so errors and promise rejections are visible
+	window.addEventListener('error', (ev) => {
+		console.error('[form] runtime error', ev.error || ev.message || ev);
+	});
+	window.addEventListener('unhandledrejection', (ev) => {
+		console.error('[form] unhandledrejection', ev.reason || ev);
+	});
+
 	// ==========================================
 	// 1. INITIALIZE SUPABASE
 	// ==========================================
@@ -9,26 +19,29 @@ document.addEventListener('DOMContentLoaded', () => {
 	let supabaseClient = null;
 
 	try {
-		if (window.supabase) {
+		if (window.supabase && window.supabase.createClient) {
+			console.log('[form] Supabase UMD detected');
 			supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 		} else {
-			console.error("Supabase CDN failed to load.");
+			console.error('Supabase UMD not loaded');
 		}
 	} catch (error) {
-		console.error("Error setting up Supabase:", error);
+		console.error('Error setting up Supabase:', error);
 	}
 
 	const DRAFT_KEY = 'subswap_draft_v1';
 	let currentListingId = null;
 
 	const formEl = document.getElementById('listing-form');
-	if (formEl) {
-		formEl.addEventListener('keydown', function(e) {
-			if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
-				e.preventDefault();
-			}
-		});
+	if (!formEl) {
+		console.error('Missing required element: listing-form');
+		return;
 	}
+	formEl.addEventListener('keydown', function(e) {
+		if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+			e.preventDefault();
+		}
+	});
 
 	const hamburger  = document.getElementById('nav-hamburger');
 	const mobileMenu = document.getElementById('nav-mobile-menu');
@@ -715,6 +728,7 @@ document.getElementById('listing-form').addEventListener('submit', async e => {
 				.upload(filePath, file);
 
 			if (uploadError) {
+				console.error('[form] Supabase storage upload error', uploadError);
 				throw new Error('Image upload failed: ' + uploadError.message);
 			}
 
@@ -733,13 +747,13 @@ document.getElementById('listing-form').addEventListener('submit', async e => {
 				.from('listings')
 				.update(payload)
 				.eq('id', currentListingId); 
-			if (error) throw new Error('Database update error: ' + error.message);
+			if (error) { console.error('[form] Supabase update error', error); throw new Error('Database update error: ' + error.message); }
 		} else {
 			const { data, error } = await supabaseClient
 				.from('listings')
 				.insert([payload])
 				.select(); 
-			if (error) throw new Error('Database insert error: ' + error.message);
+			if (error) { console.error('[form] Supabase insert error', error); throw new Error('Database insert error: ' + error.message); }
 			if (data && data.length > 0) {
 				currentListingId = data[0].id;
 			}
@@ -758,7 +772,7 @@ document.getElementById('listing-form').addEventListener('submit', async e => {
 			}));
 			if (photoRows.length) {
 				const { error: photoErr } = await supabaseClient.from('listing_photos').insert(photoRows);
-				if (photoErr) throw new Error('Failed to save listing photos: ' + photoErr.message);
+					if (photoErr) { console.error('[form] Supabase insert listing_photos error', photoErr); throw new Error('Failed to save listing photos: ' + photoErr.message); }
 			}
 		} catch (photoSaveErr) {
 			console.error('Photo save error:', photoSaveErr);

@@ -1,4 +1,20 @@
 document.addEventListener('DOMContentLoaded', () => {
+	console.log('[home] script loaded');
+
+	// Global runtime logging so errors show up in console for debugging
+	window.addEventListener('error', (ev) => {
+		console.error('[home] runtime error', ev.error || ev.message || ev);
+	});
+	window.addEventListener('unhandledrejection', (ev) => {
+		console.error('[home] unhandledrejection', ev.reason || ev);
+	});
+
+	// Required DOM element check
+	const _featuredGridCheck = document.getElementById('featured-grid');
+	if (!_featuredGridCheck) {
+		console.error('Missing required element: featured-grid');
+		return;
+	}
 	// Mobile menu toggle (guarded)
 	const hb = document.getElementById('nav-hamburger');
 	const mm = document.getElementById('nav-mobile-menu');
@@ -18,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	const supabaseClient = (window.supabase && window.supabase.createClient)
 		? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 		: null;
+	if (window.supabase && window.supabase.createClient) console.log('[home] Supabase UMD detected');
+	else console.error('Supabase UMD not loaded');
 
 	// Helper to safely create listing card nodes
 	function createListingCard(item) {
@@ -69,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		if (!supabaseClient) return;
 		try {
 			const { data, error } = await supabaseClient.from('listings').select('*').eq('status', 'approved');
-			if (error) return;
+			if (error) { console.error('[home] Supabase query error', error); return; }
 			grid.innerHTML = '';
 			if (Array.isArray(data)) {
 				data.forEach(item => {
