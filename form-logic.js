@@ -1,158 +1,171 @@
-// ==========================================
-// 1. INITIALIZE SUPABASE
-// ==========================================
-const SUPABASE_URL = 'https://doehqqwqwjebhfgdvyum.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_ZZ4mKcw6_e9diz7oFfbVag_YA9zkqFW';
+// Wrap form logic in DOMContentLoaded and guard element access
+document.addEventListener('DOMContentLoaded', () => {
+	// ==========================================
+	// 1. INITIALIZE SUPABASE
+	// ==========================================
+	const SUPABASE_URL = 'https://doehqqwqwjebhfgdvyum.supabase.co';
+	const SUPABASE_ANON_KEY = 'sb_publishable_ZZ4mKcw6_e9diz7oFfbVag_YA9zkqFW';
 
-let supabaseClient = null;
+	let supabaseClient = null;
 
-try {
-	if (window.supabase) {
-		supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-	} else {
-		console.error("Supabase CDN failed to load.");
-	}
-} catch (error) {
-	console.error("Error setting up Supabase:", error);
-}
-
-const DRAFT_KEY = 'subswap_draft_v1';
-let currentListingId = null; 
-
-document.getElementById('listing-form').addEventListener('keydown', function(e) {
-	if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
-		e.preventDefault(); 
-	}
-});
-
-const hamburger  = document.getElementById('nav-hamburger');
-const mobileMenu = document.getElementById('nav-mobile-menu');
-
-hamburger.addEventListener('click', e => {
-	e.stopPropagation();
-	mobileMenu.classList.toggle('open');
-});
-
-document.addEventListener('click', e => {
-	if (!e.target.closest('nav.ss-nav')) mobileMenu.classList.remove('open');
-});
-
-function setNavPostLinkVisibility(visible) {
-	const d = document.getElementById('nav-post-link');
-	const m = document.getElementById('nav-post-link-mobile');
-	if (d) d.style.display = visible ? '' : 'none';
-	if (m) m.style.display = visible ? '' : 'none';
-}
-
-// ── Photo storage & duplicate/size blocker ────────────────
-// storedFiles holds objects: { file: File, note: string }
-let storedFiles = [];
-const strip = document.getElementById('photo-strip');
-const uploadZone = document.getElementById('upload-zone');
-
-// Reordering Logic (Sortable uses dataset.index to map DOM -> storedFiles)
-if (strip) {
-	Sortable.create(strip, {
-		animation: 150,
-		onEnd: () => {
-			const newOrder = [];
-			strip.querySelectorAll('.photo-thumb-wrap').forEach(el => newOrder.push(storedFiles[el.dataset.index]));
-			storedFiles = newOrder;
-			renderPhotos();
+	try {
+		if (window.supabase) {
+			supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+		} else {
+			console.error("Supabase CDN failed to load.");
 		}
-	});
-}
+	} catch (error) {
+		console.error("Error setting up Supabase:", error);
+	}
 
-function moveUp(i) {
-	if (i <= 0) return;
-	[storedFiles[i - 1], storedFiles[i]] = [storedFiles[i], storedFiles[i - 1]];
-	renderPhotos();
-}
-function moveDown(i) {
-	if (i >= storedFiles.length - 1) return;
-	[storedFiles[i + 1], storedFiles[i]] = [storedFiles[i], storedFiles[i + 1]];
-	renderPhotos();
-}
+	const DRAFT_KEY = 'subswap_draft_v1';
+	let currentListingId = null;
 
-function renderPhotos() {
-	const countMsg = document.getElementById('photo-count-msg');
-	strip.innerHTML = '';
-	storedFiles.forEach((entry, i) => {
-		const file = entry.file;
-		const wrap = document.createElement('div');
-		wrap.className = 'photo-thumb-wrap';
-		wrap.dataset.index = i; // Needed for sortable sync
+	const formEl = document.getElementById('listing-form');
+	if (formEl) {
+		formEl.addEventListener('keydown', function(e) {
+			if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+				e.preventDefault();
+			}
+		});
+	}
 
-		const img = document.createElement('img');
-		img.src = URL.createObjectURL(file);
-		img.alt = file.name || `photo-${i+1}`;
+	const hamburger  = document.getElementById('nav-hamburger');
+	const mobileMenu = document.getElementById('nav-mobile-menu');
+	if (hamburger && mobileMenu) {
+		hamburger.addEventListener('click', e => {
+			e.stopPropagation();
+			mobileMenu.classList.toggle('open');
+		});
+		document.addEventListener('click', e => {
+			if (!e.target.closest('nav.ss-nav')) mobileMenu.classList.remove('open');
+		});
+	}
 
-		const controls = document.createElement('div');
-		controls.style.display = 'flex';
-		controls.style.gap = '6px';
-		controls.style.marginBottom = '8px';
+	function setNavPostLinkVisibility(visible) {
+		const d = document.getElementById('nav-post-link');
+		const m = document.getElementById('nav-post-link-mobile');
+		if (d) d.style.display = visible ? '' : 'none';
+		if (m) m.style.display = visible ? '' : 'none';
+	}
 
-		const up = document.createElement('button'); up.type = 'button'; up.className = 'photo-move'; up.textContent = '↑';
-		const down = document.createElement('button'); down.type = 'button'; down.className = 'photo-move'; down.textContent = '↓';
-		up.addEventListener('click', () => { moveUp(i); });
-		down.addEventListener('click', () => { moveDown(i); });
+	// ── Photo storage & duplicate/size blocker ────────────────
+	// storedFiles holds objects: { file: File, note: string }
+	let storedFiles = [];
+	const strip = document.getElementById('photo-strip');
+	const uploadZone = document.getElementById('upload-zone');
 
-		const del = document.createElement('button'); del.type = 'button'; del.className = 'photo-delete'; del.innerHTML = '✕';
-		del.addEventListener('click', () => { storedFiles.splice(i, 1); renderPhotos(); if (storedFiles.length >= 3) clearFieldError('upload-zone'); });
+	// Reordering Logic (Sortable uses dataset.index to map DOM -> storedFiles)
+	if (strip && window.Sortable) {
+		Sortable.create(strip, {
+			animation: 150,
+			onEnd: () => {
+				const newOrder = [];
+				strip.querySelectorAll('.photo-thumb-wrap').forEach(el => newOrder.push(storedFiles[el.dataset.index]));
+				storedFiles = newOrder;
+				renderPhotos();
+			}
+		});
+	}
 
-		controls.appendChild(up);
-		controls.appendChild(down);
-		controls.appendChild(del);
+	function moveUp(i) {
+		if (i <= 0) return;
+		[storedFiles[i - 1], storedFiles[i]] = [storedFiles[i], storedFiles[i - 1]];
+		renderPhotos();
+	}
+	function moveDown(i) {
+		if (i >= storedFiles.length - 1) return;
+		[storedFiles[i + 1], storedFiles[i]] = [storedFiles[i], storedFiles[i + 1]];
+		renderPhotos();
+	}
 
-		const noteInput = document.createElement('input');
-		noteInput.type = 'text';
-		noteInput.className = 'photo-note';
-		noteInput.placeholder = 'Photo note (optional)';
-		noteInput.value = entry.note || '';
-		noteInput.style.width = '100%';
-		noteInput.style.marginTop = '6px';
-		noteInput.addEventListener('input', (e) => { storedFiles[i].note = e.target.value; saveDraft(); });
+	function renderPhotos() {
+		const countMsg = document.getElementById('photo-count-msg');
+		if (!strip) return;
+		strip.innerHTML = '';
+		storedFiles.forEach((entry, i) => {
+			const file = entry.file;
+			const wrap = document.createElement('div');
+			wrap.className = 'photo-thumb-wrap';
+			wrap.dataset.index = i; // Needed for sortable sync
 
-		wrap.appendChild(img);
-		wrap.appendChild(controls);
-		wrap.appendChild(noteInput);
-		strip.appendChild(wrap);
-	});
-	const n = storedFiles.length;
-	countMsg.textContent = n > 0 ? `${n} photo${n > 1 ? 's' : ''} added` : '';
-}
+			const img = document.createElement('img');
+			img.src = URL.createObjectURL(file);
+			img.alt = file.name || `photo-${i+1}`;
 
-function addFilesToStore(fileList) {
-	Array.from(fileList).forEach(f => {
-		if (f.size > 20 * 1024 * 1024) { 
+			const controls = document.createElement('div');
+			controls.style.display = 'flex';
+			controls.style.gap = '6px';
+			controls.style.marginBottom = '8px';
+
+			const up = document.createElement('button'); up.type = 'button'; up.className = 'photo-move'; up.textContent = '↑';
+			const down = document.createElement('button'); down.type = 'button'; down.className = 'photo-move'; down.textContent = '↓';
+			up.addEventListener('click', () => { moveUp(i); });
+			down.addEventListener('click', () => { moveDown(i); });
+
+			const del = document.createElement('button'); del.type = 'button'; del.className = 'photo-delete'; del.innerHTML = '✕';
+			del.addEventListener('click', () => { storedFiles.splice(i, 1); renderPhotos(); if (storedFiles.length >= 3) clearFieldError('upload-zone'); });
+
+			controls.appendChild(up);
+			controls.appendChild(down);
+			controls.appendChild(del);
+
+			const noteInput = document.createElement('input');
+			noteInput.type = 'text';
+			noteInput.className = 'photo-note';
+			noteInput.placeholder = 'Photo note (optional)';
+			noteInput.value = entry.note || '';
+			noteInput.style.width = '100%';
+			noteInput.style.marginTop = '6px';
+			noteInput.addEventListener('input', (e) => { storedFiles[i].note = e.target.value; saveDraft(); });
+
+			wrap.appendChild(img);
+			wrap.appendChild(controls);
+			wrap.appendChild(noteInput);
+			strip.appendChild(wrap);
+		});
+		const n = storedFiles.length;
+		if (countMsg) countMsg.textContent = n > 0 ? `${n} photo${n > 1 ? 's' : ''} added` : '';
+	}
+
+	function addFilesToStore(fileList) {
+		Array.from(fileList).forEach(f => {
+			if (f.size > 20 * 1024 * 1024) {
 				alert(`The file "${f.name}" is too large. Please select photos under 20MB.`);
-				return; 
-		}
-		const isDuplicate = storedFiles.some(sf => sf.file.name === f.name && sf.file.size === f.size);
-		if (!isDuplicate) storedFiles.push({ file: f, note: '' });
-	});
-	renderPhotos();
-	if (strip && storedFiles.length >= 3) clearFieldError('upload-zone');
-}
+				return;
+			}
+			const isDuplicate = storedFiles.some(sf => sf.file.name === f.name && sf.file.size === f.size);
+			if (!isDuplicate) storedFiles.push({ file: f, note: '' });
+		});
+		renderPhotos();
+		if (strip && storedFiles.length >= 3) clearFieldError('upload-zone');
+	}
 
-document.getElementById('photo-input').addEventListener('change', function () {
-	addFilesToStore(this.files);
-	this.value = ''; 
-});
+	const photoInput = document.getElementById('photo-input');
+	if (photoInput) {
+		photoInput.addEventListener('change', function () {
+			addFilesToStore(this.files);
+			this.value = '';
+		});
+	}
 
-// Drag & drop support onto the upload zone
-if (uploadZone) {
-	uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
-	uploadZone.addEventListener('dragleave', e => { uploadZone.classList.remove('dragover'); });
-	uploadZone.addEventListener('drop', e => {
-		e.preventDefault(); uploadZone.classList.remove('dragover');
-		if (e.dataTransfer && e.dataTransfer.files) addFilesToStore(e.dataTransfer.files);
-	});
-}
+	// Drag & drop support onto the upload zone
+	if (uploadZone) {
+		uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+		uploadZone.addEventListener('dragleave', e => { uploadZone.classList.remove('dragover'); });
+		uploadZone.addEventListener('drop', e => {
+			e.preventDefault(); uploadZone.classList.remove('dragover');
+			if (e.dataTransfer && e.dataTransfer.files) addFilesToStore(e.dataTransfer.files);
+		});
+	}
 
-document.getElementById('sem-info-btn').addEventListener('click', () => {
-	document.getElementById('sem-info-popup').classList.toggle('visible');
-});
+	const semInfoBtn = document.getElementById('sem-info-btn');
+	if (semInfoBtn) {
+		semInfoBtn.addEventListener('click', () => {
+			const popup = document.getElementById('sem-info-popup');
+			if (popup) popup.classList.toggle('visible');
+		});
+	}
 
 // ── Google Places Autocomplete ────────────────────────────
 const addrInput   = document.getElementById('address');
